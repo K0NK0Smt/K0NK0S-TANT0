@@ -101,6 +101,7 @@
 
     .instrument-mix-item{ flex-wrap:wrap; row-gap:8px; }
     .instrument-toggle{ width:auto; flex:1 1 100%; }
+    .instrument-type-wrap{ flex:0 0 auto; }
     .instrument-mix-item input[type=range]{ flex:1 1 auto; }
   }
 
@@ -130,6 +131,33 @@
      whether the instrument is actually sounding right now. */
   .instrument-toggle.editing{ box-shadow: inset 0 0 0 1px var(--accent, var(--gold)); }
   .instrument-mix-item .val{ width:34px; }
+  /* Instrument picker shown as a small hanko-style seal: just the kanji
+     glyph for the currently chosen instrument, no english label, no
+     dropdown chevron — tap it to open the native picker. The real
+     <select> is invisible but still fills the square and stays
+     interactive/keyboard-accessible; a plain flex-centered span on top
+     renders the glyph, since browsers won't reliably center text inside
+     a native select's own box. */
+  .instrument-type-wrap{
+    position:relative; width:40px; height:40px; flex:0 0 auto;
+    border:1px solid var(--accent, var(--line)); border-radius:3px;
+    background:var(--ink-2); cursor:pointer; transition:border-color .2s;
+  }
+  .instrument-type-wrap:hover{ border-color:var(--gold); }
+  .instrument-type-icon{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'Shippori Mincho', serif; font-weight:600; font-size:18px; line-height:1;
+    color:var(--paper); pointer-events:none; user-select:none;
+  }
+  .instrument-type-select{
+    position:absolute; inset:0; width:100%; height:100%;
+    appearance:none; -webkit-appearance:none;
+    margin:0; padding:0; border:none; background:none;
+    opacity:0; cursor:pointer;
+  }
+  .instrument-type-select option{
+    font-family:'Shippori Mincho', serif; background:var(--ink-2); color:var(--paper);
+  }
 
   select, .range-row input[type=range]{
     accent-color: var(--gold);
@@ -290,6 +318,23 @@
   .debug-panel.open{ display:block; }
 
   footer{ text-align:center; margin-top:24px; font-size:11px; color:var(--paper-dim); letter-spacing:0.08em; }
+
+  /* ---------- MIDI ---------- */
+  .midi-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .midi-row select{ width:auto; flex:1 1 180px; min-width:150px; }
+  .midi-enable-btn{
+    font-family:'Zen Kaku Gothic New', sans-serif; font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+    background:var(--ink-2); color:var(--paper-dim); border:1px solid var(--line); border-radius:2px;
+    padding:9px 14px; cursor:pointer; white-space:nowrap; touch-action:manipulation; user-select:none;
+    min-height:44px;
+  }
+  .midi-enable-btn:hover{ border-color:var(--gold); color:var(--paper); }
+  .midi-enable-btn:disabled{ opacity:0.4; cursor:default; }
+  .midi-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px;
+    background:var(--paper-dim); vertical-align:middle;
+  }
+  .midi-dot.on{ background:var(--moss); box-shadow:0 0 8px var(--moss); }
 </style>
 </head>
 <body>
@@ -324,6 +369,10 @@
           <button class="instrument-toggle active editing" data-inst="koto" style="--accent:#c9a24b">
             <span class="jp">箏</span><span class="en">Koto</span>
           </button>
+          <div class="instrument-type-wrap" style="--accent:#c9a24b">
+            <span class="instrument-type-icon" id="kotoTypeIcon" aria-hidden="true">箏</span>
+            <select class="instrument-type-select" id="kotoTypeSelect" aria-label="Instrument in this slot"></select>
+          </div>
           <input type="range" id="kotoVolRange" min="0" max="100" value="80">
           <span class="val" id="kotoVolVal">80</span>
         </div>
@@ -331,6 +380,10 @@
           <button class="instrument-toggle" data-inst="shamisen" style="--accent:#b3402f">
             <span class="jp">三味線</span><span class="en">Shamisen</span>
           </button>
+          <div class="instrument-type-wrap" style="--accent:#b3402f">
+            <span class="instrument-type-icon" id="shamisenTypeIcon" aria-hidden="true">三</span>
+            <select class="instrument-type-select" id="shamisenTypeSelect" aria-label="Instrument in this slot"></select>
+          </div>
           <input type="range" id="shamisenVolRange" min="0" max="100" value="50">
           <span class="val" id="shamisenVolVal">50</span>
         </div>
@@ -338,11 +391,15 @@
           <button class="instrument-toggle" data-inst="pad" style="--accent:#5b7a9e">
             <span class="jp">詩</span><span class="en">Poetry Pad</span>
           </button>
+          <div class="instrument-type-wrap" style="--accent:#5b7a9e">
+            <span class="instrument-type-icon" id="padTypeIcon" aria-hidden="true">詩</span>
+            <select class="instrument-type-select" id="padTypeSelect" aria-label="Instrument in this slot"></select>
+          </div>
           <input type="range" id="padVolRange" min="0" max="100" value="40">
           <span class="val" id="padVolVal">40</span>
         </div>
       </div>
-      <div class="kb-hint" style="margin-top:2px; text-align:left;">Tap an instrument to layer it in or out — <b>at least one stays on</b>. The ring marks which one's envelope you're editing below.</div>
+      <div class="kb-hint" style="margin-top:2px; text-align:left;">Tap an instrument to layer it in or out — <b>at least one stays on</b>. Use each dropdown to swap which instrument plays in that slot. The ring marks which one's envelope you're editing below.</div>
 
       <div class="field-label-row">
         <div class="field-label" style="margin-top:0;"><span class="jp">包絡</span> Envelope <span style="color:var(--paper-dim); text-transform:none; letter-spacing:0; font-size:11px;">— <span id="envelopeInstName">Koto</span></span></div>
@@ -424,6 +481,27 @@
           </button>
           <input type="range" id="crushAmt" min="0" max="100" value="25">
           <span class="val" id="crushAmtVal">25</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field" style="grid-column:1/-1;">
+      <div class="field-label-row">
+        <div class="field-label" style="margin-top:0;"><span class="jp">MIDI</span> MIDI In / Out</div>
+        <button class="adsr-reset-btn" id="midiSectionToggle" type="button" aria-expanded="false">Show</button>
+      </div>
+      <div id="midiSectionContent" style="display:none;">
+        <div class="midi-row">
+          <button class="midi-enable-btn" id="midiEnableBtn" type="button">Enable MIDI</button>
+          <select id="midiInSelect" disabled>
+            <option value="__none__">MIDI In: none</option>
+          </select>
+          <select id="midiOutSelect" disabled>
+            <option value="__none__">MIDI Out: none</option>
+          </select>
+        </div>
+        <div class="kb-hint" id="midiStatusText" style="margin-top:8px; text-align:left;">
+          <span class="midi-dot" id="midiStatusDot"></span><span id="midiStatusMsg">MIDI not connected.</span>
         </div>
       </div>
     </div>
@@ -545,6 +623,73 @@ function midiToNoteName(m){
   return names[m%12] + oct;
 }
 
+/* ===================== INSTRUMENT DEFINITIONS ===================== */
+// Full timbre definitions — oscillator, filter, optional distortion,
+// reverb send amount, envelope range/defaults, note length, and display
+// info. There are three fixed mixer slots (koto / shamisen / pad below),
+// each of which can be assigned any of these instruments via its
+// dropdown — the slot is just a fixed channel; what plays through it is
+// swappable.
+const INSTRUMENT_DEFS = {
+  koto: {
+    jp:"箏", en:"Koto", accent:"#c9a24b",
+    oscillator:{ type:"triangle" },
+    filter:{ type:"lowpass", frequency:6000 },
+    reverbSend:0.25, noteDuration:"2n",
+    envRange:{ attack:[0.001,0.3], decay:[0.2,4.0], sustain:[0,1], release:[0.2,4.0] },
+    envDefault:{ attack:0.004, decay:1.6, sustain:0.0, release:1.8 },
+  },
+  shamisen: {
+    jp:"三味線", en:"Shamisen", accent:"#b3402f",
+    oscillator:{ type:"sawtooth" },
+    filter:{ type:"bandpass", frequency:3400, Q:0.6 },
+    distortion:{ distortion:0.25, wet:0.4 },
+    reverbSend:0.15, noteDuration:"8n",
+    envRange:{ attack:[0.0005,0.05], decay:[0.05,1.2], sustain:[0,1], release:[0.05,1.0] },
+    envDefault:{ attack:0.001, decay:0.4, sustain:0.0, release:0.25 },
+  },
+  pad: {
+    jp:"詩", en:"Poetry Pad", accent:"#5b7a9e",
+    oscillator:{ type:"fatsine", spread:30, count:3 },
+    filter:{ type:"lowpass", frequency:2200 },
+    reverbSend:0.35, noteDuration:"2n",
+    envRange:{ attack:[0.05,3.0], decay:[0.1,2.0], sustain:[0,1], release:[0.5,6.0] },
+    envDefault:{ attack:1.4, decay:0.8, sustain:0.65, release:3.2 },
+  },
+  shakuhachi: {
+    jp:"尺八", en:"Shakuhachi", accent:"#5f7a63",
+    oscillator:{ type:"sine" },
+    filter:{ type:"lowpass", frequency:1800, Q:1.4 },
+    reverbSend:0.3, noteDuration:"2n",
+    envRange:{ attack:[0.02,0.6], decay:[0.1,1.5], sustain:[0,1], release:[0.3,3.0] },
+    envDefault:{ attack:0.09, decay:0.3, sustain:0.55, release:1.2 },
+  },
+  taiko: {
+    jp:"太鼓", en:"Taiko", accent:"#8a6642",
+    oscillator:{ type:"square" },
+    filter:{ type:"bandpass", frequency:180, Q:1.2 },
+    reverbSend:0.15, noteDuration:"16n",
+    envRange:{ attack:[0.0005,0.02], decay:[0.05,0.5], sustain:[0,0.3], release:[0.05,0.4] },
+    envDefault:{ attack:0.001, decay:0.18, sustain:0.0, release:0.12 },
+  },
+  biwa: {
+    jp:"琵琶", en:"Biwa", accent:"#7a5c8f",
+    oscillator:{ type:"sawtooth" },
+    filter:{ type:"bandpass", frequency:2500, Q:1.0 },
+    distortion:{ distortion:0.15, wet:0.25 },
+    reverbSend:0.2, noteDuration:"4n",
+    envRange:{ attack:[0.001,0.1], decay:[0.15,2.0], sustain:[0,1], release:[0.2,2.5] },
+    envDefault:{ attack:0.005, decay:0.9, sustain:0.1, release:0.9 },
+  },
+};
+const SLOTS = ["koto", "shamisen", "pad"];
+// Which instrument definition currently occupies each mixer slot — the
+// slot key never changes, but this does, via that slot's dropdown.
+const slotType = { koto:"koto", shamisen:"shamisen", pad:"pad" };
+function noteDurationFor(slot){ return INSTRUMENT_DEFS[slotType[slot]].noteDuration; }
+function instNameFor(slot){ return INSTRUMENT_DEFS[slotType[slot]].en; }
+function instAccentFor(slot){ return INSTRUMENT_DEFS[slotType[slot]].accent; }
+
 /* ===================== STATE ===================== */
 // currentInstrument is which instrument's envelope (ADSR) is being edited —
 // not necessarily which ones are audible. Playback is driven by
@@ -562,24 +707,27 @@ let currentBPM = 120;
 
 const keyEls = {};
 
+/* ===================== MIDI STATE ===================== */
+let midiAccess = null;
+let midiInput = null;   // currently attached MIDIInput (or null)
+let midiOutput = null;  // currently selected MIDIOutput (or null)
+const midiActiveNoteEls = new Map(); // midi note -> matching keyboard <div>.key element, for visual feedback
+
 /* ===================== ADSR ENVELOPE ===================== */
-// Each instrument has its own natural min/max range per stage (seconds;
-// sustain is a 0..1 level, not a time). Sliders are 0..100 and map onto
-// these ranges so "50%" always feels reasonable regardless of instrument.
-const ENV_RANGES = {
-  koto:     { attack:[0.001, 0.3],  decay:[0.2, 4.0], sustain:[0, 1], release:[0.2, 4.0] },
-  shamisen: { attack:[0.0005, 0.05], decay:[0.05, 1.2], sustain:[0, 1], release:[0.05, 1.0] },
-  pad:      { attack:[0.05, 3.0],   decay:[0.1, 2.0], sustain:[0, 1], release:[0.5, 6.0] },
-};
-// Starting envelope values, matching the original synth definitions.
-const instrumentEnv = {
-  koto:     { attack:0.004, decay:1.6, sustain:0.0,  release:1.8 },
-  shamisen: { attack:0.001, decay:0.4, sustain:0.0,  release:0.25 },
-  pad:      { attack:1.4,   decay:0.8, sustain:0.65, release:3.2 },
-};
-// instrumentEnv gets mutated live as sliders move, so snapshot the
-// original values here — this is what the ADSR Reset button restores.
-const DEFAULT_ENV = JSON.parse(JSON.stringify(instrumentEnv));
+// Each slot's min/max range per ADSR stage (seconds; sustain is a 0..1
+// level, not a time) comes from whichever instrument currently occupies
+// that slot. Sliders are 0..100 and map onto that range so "50%" always
+// feels reasonable no matter which instrument is selected.
+function envRangeFor(slot){ return INSTRUMENT_DEFS[slotType[slot]].envRange; }
+// The instrument's own natural envelope — what the ADSR Reset button
+// restores, and what a slot's envelope snaps to when its instrument is
+// swapped via the dropdown (the old values could sit outside the new
+// instrument's range).
+function defaultEnvFor(slot){ return INSTRUMENT_DEFS[slotType[slot]].envDefault; }
+// Live, per-slot envelope values, mutated as ADSR sliders move. Seeded
+// from each slot's starting instrument.
+const instrumentEnv = {};
+SLOTS.forEach(slot => { instrumentEnv[slot] = { ...defaultEnvFor(slot) }; });
 function lerp(range, t){ return range[0] + (range[1]-range[0]) * t; }
 function invLerp(range, v){
   if(range[1] === range[0]) return 0;
@@ -623,8 +771,11 @@ let customNotes = [];             // user-built sequence, in tap order (source: 
 
 /* ===================== AUDIO ENGINE ===================== */
 let audioReady = false;
-let masterVolume, kotoSynth, shamisenSynth, padSynth;
-let kotoFilter, shamiDistortion, shamiFilter, padFilter;
+let masterVolume;
+// Per-slot audio nodes, keyed by slot (koto/shamisen/pad) rather than by
+// instrument type — the instrument playing through a slot can change at
+// any time via its dropdown while the slot itself stays put.
+const slotSynth = {}, slotFilter = {}, slotDistortion = {}, slotReverbSend = {};
 let sendReverb;
 let fxBus, delayFx, chorusFx, phaserFx, crushFx;
 
@@ -654,47 +805,57 @@ function buildAudio(){
   Object.keys(FX_DEFS).forEach(applyFxWet);
   log("FX rack ready");
 
-  // --- Koto: bright plucked string, long resonant tail ---
-  kotoFilter = new Tone.Filter({ frequency: 6000, type: "lowpass" });
-  kotoSynth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: "triangle" },
-    envelope: instrumentEnv.koto
-  });
-  kotoSynth.connect(kotoFilter);
-  kotoFilter.connect(fxBus);
-  const kotoReverbSend = new Tone.Gain(0.25);
-  kotoFilter.connect(kotoReverbSend);
-  kotoReverbSend.connect(sendReverb);
-
-  // --- Shamisen: buzzy, percussive attack (sawari), short decay ---
-  shamiFilter = new Tone.Filter({ frequency: 3400, type: "bandpass", Q: 0.6 });
-  shamiDistortion = new Tone.Distortion({ distortion: 0.25, wet: 0.4 });
-  shamisenSynth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: "sawtooth" },
-    envelope: instrumentEnv.shamisen
-  });
-  shamisenSynth.chain(shamiFilter, shamiDistortion, fxBus);
-  const shamiReverbSend = new Tone.Gain(0.15);
-  shamiDistortion.connect(shamiReverbSend);
-  shamiReverbSend.connect(sendReverb);
-
-  // --- Poetry Pad: slow, breathing, ambient ---
-  padFilter = new Tone.Filter({ frequency: 2200, type: "lowpass" });
-  padSynth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: "fatsine", spread: 30, count: 3 },
-    envelope: instrumentEnv.pad
-  });
-  padSynth.connect(padFilter);
-  padFilter.connect(fxBus);
-  const padReverbSend = new Tone.Gain(0.35);
-  padFilter.connect(padReverbSend);
-  padReverbSend.connect(sendReverb);
-
-  // Apply each instrument's stored mixer level now that all three synths exist.
-  Object.keys(instrumentVolume).forEach(inst => setInstrumentVolume(inst, instrumentVolume[inst]));
+  // Build all three mixer slots from whichever instrument is currently
+  // assigned to each (defaults to koto / shamisen / pad).
+  SLOTS.forEach(buildSlotSynth);
 
   audioReady = true;
   log("Audio graph ready. Context state: " + Tone.context.state + ", sample rate: " + Tone.context.sampleRate);
+}
+
+// (Re)builds one mixer slot's synth chain — oscillator, filter, optional
+// distortion, and reverb send — from the instrument definition currently
+// assigned to it. Disposes any previous nodes first, so swapping a slot's
+// instrument via its dropdown doesn't leak audio nodes.
+function buildSlotSynth(slot){
+  const def = INSTRUMENT_DEFS[slotType[slot]];
+
+  if(slotDistortion[slot]) slotDistortion[slot].dispose();
+  if(slotFilter[slot]) slotFilter[slot].dispose();
+  if(slotReverbSend[slot]) slotReverbSend[slot].dispose();
+  if(slotSynth[slot]) slotSynth[slot].dispose();
+
+  const filter = new Tone.Filter({
+    frequency: def.filter.frequency, type: def.filter.type, Q: def.filter.Q || 1
+  });
+  const synth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: def.oscillator,
+    envelope: instrumentEnv[slot]
+  });
+
+  let tail;
+  let dist = null;
+  if(def.distortion){
+    dist = new Tone.Distortion({ distortion: def.distortion.distortion, wet: def.distortion.wet });
+    synth.chain(filter, dist, fxBus);
+    tail = dist;
+  } else {
+    synth.connect(filter);
+    filter.connect(fxBus);
+    tail = filter;
+  }
+
+  const reverbSend = new Tone.Gain(def.reverbSend);
+  tail.connect(reverbSend);
+  reverbSend.connect(sendReverb);
+
+  slotSynth[slot] = synth;
+  slotFilter[slot] = filter;
+  slotDistortion[slot] = dist;
+  slotReverbSend[slot] = reverbSend;
+
+  synth.set({ detune: pitchBendCents });
+  setInstrumentVolume(slot, instrumentVolume[slot]);
 }
 
 function setMasterVolume(v){ // v: 0..1
@@ -717,7 +878,7 @@ function setBPM(bpm){
 // what makes it feel like a real pitch-bend wheel rather than a tuning knob.
 function setPitchBend(cents){
   pitchBendCents = cents;
-  [kotoSynth, shamisenSynth, padSynth].forEach(synth=>{
+  Object.values(slotSynth).forEach(synth=>{
     if(synth) synth.set({ detune: cents });
   });
 }
@@ -736,11 +897,8 @@ function applyFxWet(fx){
   node.wet.value = wet;
 }
 
-function synthForInstrument(inst){
-  if(inst === "koto") return kotoSynth;
-  if(inst === "shamisen") return shamisenSynth;
-  if(inst === "pad") return padSynth;
-  return null;
+function synthForInstrument(slot){
+  return slotSynth[slot] || null;
 }
 
 // Each instrument's own mixer level (independent of the master Volume
@@ -763,11 +921,6 @@ function setEnvParam(inst, param, value){
   if(synth) synth.set({ envelope: { [param]: value } });
 }
 
-// Each instrument has its own natural note length (koto/pad ring out,
-// shamisen is short and percussive) — kept per-instrument even though
-// several may now sound together on the same key press.
-const NOTE_DURATION = { koto: "2n", shamisen: "8n", pad: "2n" };
-
 function triggerNote(midi, time){
   if(!audioReady){ log("triggerNote skipped — audio not ready yet"); return; }
   if(enabledInstruments.size === 0) return;
@@ -776,11 +929,15 @@ function triggerNote(midi, time){
     const synth = synthForInstrument(inst);
     if(!synth) return;
     try{
-      synth.triggerAttackRelease(noteName, NOTE_DURATION[inst], time);
+      // Each instrument has its own natural note length (koto/pad ring
+      // out, shamisen is short and percussive), looked up per-slot even
+      // though several may sound together on the same key press.
+      synth.triggerAttackRelease(noteName, noteDurationFor(inst), time);
     }catch(err){
       log("triggerNote ERROR (" + inst + "): " + err.message);
     }
   });
+  sendMidiOut(midi, 100);
   log("play [" + Array.from(enabledInstruments).join("+") + "] " + noteName);
 }
 
@@ -882,6 +1039,23 @@ function populateSelects(){
     if(pc===currentRootPC) opt.selected = true;
     rootSel.appendChild(opt);
   });
+
+  // Each mixer slot gets a dropdown listing every available instrument —
+  // shown as just its kanji glyph, hanko-seal style, with the full name
+  // as a hover/native tooltip — so any of the three slots can be
+  // reassigned at any time.
+  SLOTS.forEach(slot=>{
+    const sel = document.getElementById(slot + "TypeSelect");
+    if(!sel) return;
+    Object.entries(INSTRUMENT_DEFS).forEach(([key, def])=>{
+      const opt = document.createElement("option");
+      opt.value = key; opt.textContent = def.jp;
+      opt.title = def.en;
+      if(key === slotType[slot]) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    updateInstrumentSlotUI(slot);
+  });
 }
 
 function rootMidiBase(){
@@ -921,7 +1095,7 @@ function refreshKeyLabels(){
 
 const ADSR_PARAMS = ["attack", "decay", "sustain", "release"];
 function refreshADSRUI(){
-  const ranges = ENV_RANGES[currentInstrument];
+  const ranges = envRangeFor(currentInstrument);
   const env = instrumentEnv[currentInstrument];
   ADSR_PARAMS.forEach(param=>{
     const range = document.getElementById(param + "Range");
@@ -932,21 +1106,43 @@ function refreshADSRUI(){
   });
 }
 
-const INSTRUMENT_NAMES = { koto: "Koto", shamisen: "Shamisen", pad: "Poetry Pad" };
-const INSTRUMENT_ACCENTS = { koto: "#c9a24b", shamisen: "#b3402f", pad: "#5b7a9e" };
-
 // Two independent things get shown here: which instruments are actually
 // audible (enabledInstruments — can be several) and which single one the
-// Envelope panel below is currently editing (currentInstrument).
+// Envelope panel below is currently editing (currentInstrument). Both are
+// keyed by slot; the label/color shown for each slot always reflects
+// whichever instrument that slot's dropdown currently selects.
 function setActiveInstrumentUI(){
   document.querySelectorAll(".instrument-toggle").forEach(btn=>{
     const inst = btn.dataset.inst;
     btn.classList.toggle("active", enabledInstruments.has(inst));
     btn.classList.toggle("editing", inst === currentInstrument);
   });
-  Object.values(keyEls).forEach(({el})=> el.style.setProperty("--accent", INSTRUMENT_ACCENTS[currentInstrument]));
+  Object.values(keyEls).forEach(({el})=> el.style.setProperty("--accent", instAccentFor(currentInstrument)));
   const envInstName = document.getElementById("envelopeInstName");
-  if(envInstName) envInstName.textContent = INSTRUMENT_NAMES[currentInstrument];
+  if(envInstName) envInstName.textContent = instNameFor(currentInstrument);
+}
+
+// Refreshes one slot's toggle-button label/color to match whichever
+// instrument its dropdown currently has selected.
+function updateInstrumentSlotUI(slot){
+  const def = INSTRUMENT_DEFS[slotType[slot]];
+  const btn = document.querySelector('.instrument-toggle[data-inst="' + slot + '"]');
+  if(btn){
+    btn.style.setProperty("--accent", def.accent);
+    const jpEl = btn.querySelector(".jp");
+    const enEl = btn.querySelector(".en");
+    if(jpEl) jpEl.textContent = def.jp;
+    if(enEl) enEl.textContent = def.en;
+  }
+  // The picker's visible face is the flex-centered icon span, not the
+  // (invisible) <select> itself — the select just supplies the native,
+  // accessible dropdown behavior on top of it.
+  const wrap = document.getElementById(slot + "TypeIcon")?.closest(".instrument-type-wrap");
+  if(wrap) wrap.style.setProperty("--accent", def.accent);
+  const icon = document.getElementById(slot + "TypeIcon");
+  if(icon) icon.textContent = def.jp;
+  const sel = document.getElementById(slot + "TypeSelect");
+  if(sel) sel.title = def.jp + " — " + def.en;
 }
 
 function pressKey(ch){
@@ -975,6 +1171,192 @@ function releaseKey(ch){
   entry.el.classList.remove("active");
 }
 
+/* ===================== MIDI ===================== */
+// Incoming MIDI notes play at their exact received pitch (no scale
+// quantization — that's a musical choice for an external controller),
+// reusing the same held/last/custom bookkeeping the on-screen keys use
+// so the arpeggiator treats MIDI notes identically to typed ones.
+function midiStatus(msg, on){
+  const dot = document.getElementById("midiStatusDot");
+  const text = document.getElementById("midiStatusMsg");
+  if(dot) dot.classList.toggle("on", !!on);
+  if(text) text.textContent = msg;
+}
+
+function midiNoteOn(midi, velocity){
+  if(!audioReady){ log("MIDI note-on ignored — click Begin Playing first"); return; }
+  if(arpEnabled && arpSource === "held"){
+    heldNotes.add(midi);
+  } else {
+    triggerNote(midi);
+  }
+  if(arpEnabled && arpSource === "last") pushLastPlayed(midi);
+  if(arpEnabled && arpSource === "custom") addCustomNote(midi);
+  // If this pitch happens to match a currently-labeled key, flash it too.
+  const match = Object.values(keyEls).find(({el})=> parseInt(el.dataset.midi,10) === midi);
+  if(match){
+    match.el.classList.add("active");
+    midiActiveNoteEls.set(midi, match.el);
+  }
+}
+function midiNoteOff(midi){
+  if(arpEnabled && arpSource === "held"){
+    heldNotes.delete(midi);
+  }
+  const el = midiActiveNoteEls.get(midi);
+  if(el){
+    el.classList.remove("active");
+    midiActiveNoteEls.delete(midi);
+  }
+}
+
+function handleMidiMessage(e){
+  const data = e.data;
+  if(!data || data.length < 2) return;
+  const cmd = data[0] & 0xf0;
+  const note = data[1];
+  const velocity = data.length > 2 ? data[2] : 0;
+  if(cmd === 0x90 && velocity > 0){
+    midiNoteOn(note, velocity);
+  } else if(cmd === 0x80 || (cmd === 0x90 && velocity === 0)){
+    midiNoteOff(note);
+  }
+}
+
+// Mirrors whatever the synth just played out to the selected MIDI output,
+// scheduling a matching Note Off after that instrument's play duration
+// since triggerNote fires a fixed-length triggerAttackRelease rather than
+// a held note.
+function sendMidiOut(midi, velocity){
+  if(!midiOutput) return;
+  try{
+    const inst = Array.from(enabledInstruments)[0] || "koto";
+    let durMs = 400;
+    if(typeof Tone !== "undefined"){
+      try{ durMs = Tone.Time(noteDurationFor(inst)).toSeconds() * 1000; }catch(e){}
+    }
+    midiOutput.send([0x90, midi & 0x7f, velocity & 0x7f]);
+    setTimeout(()=>{
+      try{ midiOutput.send([0x80, midi & 0x7f, 0]); }catch(e){}
+    }, Math.max(30, durMs));
+  }catch(err){
+    log("MIDI out error: " + err.message);
+  }
+}
+
+function populateMidiSelects(){
+  const inSel = document.getElementById("midiInSelect");
+  const outSel = document.getElementById("midiOutSelect");
+  if(!midiAccess) return;
+
+  const prevIn = inSel.value;
+  const prevOut = outSel.value;
+  inSel.innerHTML = "";
+  outSel.innerHTML = "";
+
+  const noneIn = document.createElement("option");
+  noneIn.value = "__none__"; noneIn.textContent = "MIDI In: none";
+  inSel.appendChild(noneIn);
+  const allIn = document.createElement("option");
+  allIn.value = "__all__"; allIn.textContent = "MIDI In: All Devices";
+  inSel.appendChild(allIn);
+  midiAccess.inputs.forEach(input=>{
+    const opt = document.createElement("option");
+    opt.value = input.id; opt.textContent = "MIDI In: " + input.name;
+    inSel.appendChild(opt);
+  });
+
+  const noneOut = document.createElement("option");
+  noneOut.value = "__none__"; noneOut.textContent = "MIDI Out: none";
+  outSel.appendChild(noneOut);
+  midiAccess.outputs.forEach(output=>{
+    const opt = document.createElement("option");
+    opt.value = output.id; opt.textContent = "MIDI Out: " + output.name;
+    outSel.appendChild(opt);
+  });
+
+  inSel.disabled = false;
+  outSel.disabled = false;
+
+  // Restore prior selection if that device is still present, else
+  // default to listening on everything so a freshly-plugged-in
+  // controller works without extra clicks.
+  const inOptions = Array.from(inSel.options).map(o=>o.value);
+  inSel.value = inOptions.includes(prevIn) ? prevIn : "__all__";
+  const outOptions = Array.from(outSel.options).map(o=>o.value);
+  outSel.value = outOptions.includes(prevOut) ? prevOut : "__none__";
+
+  applyMidiInSelection();
+  applyMidiOutSelection();
+}
+
+function detachAllMidiInputs(){
+  if(!midiAccess) return;
+  midiAccess.inputs.forEach(input=>{ input.onmidimessage = null; });
+  midiInput = null;
+}
+
+function applyMidiInSelection(){
+  if(!midiAccess) return;
+  detachAllMidiInputs();
+  const val = document.getElementById("midiInSelect").value;
+  let count = 0;
+  if(val === "__all__"){
+    midiAccess.inputs.forEach(input=>{ input.onmidimessage = handleMidiMessage; count++; });
+  } else if(val !== "__none__"){
+    const input = midiAccess.inputs.get(val);
+    if(input){ input.onmidimessage = handleMidiMessage; midiInput = input; count = 1; }
+  }
+  log("MIDI in -> " + val + (count ? " (listening)" : ""));
+  refreshMidiStatusText();
+}
+
+function applyMidiOutSelection(){
+  if(!midiAccess) return;
+  const val = document.getElementById("midiOutSelect").value;
+  midiOutput = (val !== "__none__") ? (midiAccess.outputs.get(val) || null) : null;
+  log("MIDI out -> " + val);
+  refreshMidiStatusText();
+}
+
+function refreshMidiStatusText(){
+  if(!midiAccess){ midiStatus("MIDI not connected.", false); return; }
+  const inVal = document.getElementById("midiInSelect").value;
+  const outVal = document.getElementById("midiOutSelect").value;
+  const inCount = midiAccess.inputs.size;
+  const outCount = midiAccess.outputs.size;
+  const inLabel = inVal === "__all__" ? "all devices" : (inVal === "__none__" ? "none" : (midiAccess.inputs.get(inVal)?.name || "device"));
+  const outLabel = outVal === "__none__" ? "none" : (midiAccess.outputs.get(outVal)?.name || "device");
+  const active = inVal !== "__none__" || outVal !== "__none__";
+  midiStatus(inCount + " in / " + outCount + " out detected — listening: " + inLabel + ", sending: " + outLabel, active);
+}
+
+async function enableMidi(){
+  const btn = document.getElementById("midiEnableBtn");
+  if(!navigator.requestMIDIAccess){
+    midiStatus("Web MIDI not supported in this browser.", false);
+    log("Web MIDI API unavailable (navigator.requestMIDIAccess missing)");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Requesting…";
+  try{
+    midiAccess = await navigator.requestMIDIAccess({ sysex:false });
+    midiAccess.onstatechange = ()=>{
+      log("MIDI device state changed");
+      populateMidiSelects();
+    };
+    populateMidiSelects();
+    btn.textContent = "MIDI Enabled";
+    log("Web MIDI access granted");
+  }catch(err){
+    midiStatus("MIDI access denied or failed: " + (err && err.message ? err.message : err), false);
+    log("MIDI access error: " + err.message);
+    btn.disabled = false;
+    btn.textContent = "Enable MIDI";
+  }
+}
+
 /* ===================== EVENTS ===================== */
 const heldPhysicalKeys = new Set();
 
@@ -999,12 +1381,32 @@ function wireEvents(){
     refreshADSRUI();
   });
 
-  ["koto", "shamisen", "pad"].forEach(inst=>{
-    const range = document.getElementById(inst + "VolRange");
-    const val = document.getElementById(inst + "VolVal");
+  SLOTS.forEach(slot=>{
+    const range = document.getElementById(slot + "VolRange");
+    const val = document.getElementById(slot + "VolVal");
     range.addEventListener("input", ()=>{
       val.textContent = range.value;
-      setInstrumentVolume(inst, parseInt(range.value, 10));
+      setInstrumentVolume(slot, parseInt(range.value, 10));
+    });
+
+    const typeSel = document.getElementById(slot + "TypeSelect");
+    typeSel.addEventListener("change", (e)=>{
+      const newType = e.target.value;
+      slotType[slot] = newType;
+      // The old ADSR values could sit outside the new instrument's
+      // natural range, so swapping instruments resets this slot's
+      // envelope to that instrument's own defaults.
+      instrumentEnv[slot] = { ...defaultEnvFor(slot) };
+      if(audioReady) buildSlotSynth(slot);
+      updateInstrumentSlotUI(slot);
+      // Swapping a slot's instrument is exactly the moment the person
+      // most wants to see (and likely tweak) its envelope, so move the
+      // Envelope panel's focus onto this slot rather than leaving it on
+      // whichever slot happened to be focused before.
+      currentInstrument = slot;
+      setActiveInstrumentUI();
+      refreshADSRUI();
+      log("slot [" + slot + "] instrument -> " + newType);
     });
   });
 
@@ -1026,13 +1428,13 @@ function wireEvents(){
     const val = document.getElementById(param + "Val");
     range.addEventListener("input", ()=>{
       const t = range.value / 100;
-      const value = lerp(ENV_RANGES[currentInstrument][param], t);
+      const value = lerp(envRangeFor(currentInstrument)[param], t);
       val.textContent = fmtEnvVal(param, value);
       setEnvParam(currentInstrument, param, value);
     });
   });
   document.getElementById("adsrResetBtn").addEventListener("click", ()=>{
-    const defaults = DEFAULT_ENV[currentInstrument];
+    const defaults = defaultEnvFor(currentInstrument);
     ADSR_PARAMS.forEach(param=>{
       setEnvParam(currentInstrument, param, defaults[param]);
     });
@@ -1151,6 +1553,18 @@ function wireEvents(){
   });
 
   bindPointerToKeys();
+
+  document.getElementById("midiEnableBtn").addEventListener("click", enableMidi);
+  document.getElementById("midiInSelect").addEventListener("change", applyMidiInSelection);
+  document.getElementById("midiOutSelect").addEventListener("change", applyMidiOutSelection);
+  document.getElementById("midiSectionToggle").addEventListener("click", () => {
+    const content = document.getElementById("midiSectionContent");
+    const btn = document.getElementById("midiSectionToggle");
+    const nowVisible = content.style.display === "none";
+    content.style.display = nowVisible ? "" : "none";
+    btn.textContent = nowVisible ? "Hide" : "Show";
+    btn.setAttribute("aria-expanded", nowVisible ? "true" : "false");
+  });
 
   document.getElementById("testToneBtn").addEventListener("click", async ()=>{
     if(typeof Tone === "undefined"){ log("Test tone: Tone.js not available"); return; }
